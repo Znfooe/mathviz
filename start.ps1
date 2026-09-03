@@ -1,5 +1,6 @@
 # MathViz One-Click Start Script (PowerShell)
-# Usage: .\start.ps1
+# Usage: .\start.ps1  (double-click start.bat)
+# ASCII-only on purpose: Windows PowerShell 5.1 mis-reads UTF-8 without BOM.
 
 $ErrorActionPreference = "Stop"
 
@@ -25,7 +26,7 @@ if (-not $?) {
 Write-Host "[OK] Node.js detected: $nodeVersion" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "[1/2] Checking dependencies..." -ForegroundColor Cyan
+Write-Host "[1/3] Checking dependencies..." -ForegroundColor Cyan
 
 # Install root deps if missing
 if (-not (Test-Path "node_modules")) {
@@ -73,10 +74,53 @@ if (-not (Test-Path "server\node_modules")) {
 }
 
 Write-Host ""
-Write-Host "[2/2] Starting dev servers..." -ForegroundColor Cyan
+Write-Host "[2/3] Starting dev servers..." -ForegroundColor Cyan
 Write-Host "Frontend: http://localhost:5173" -ForegroundColor White
 Write-Host "Backend:  http://localhost:3001" -ForegroundColor White
-Write-Host "Press Ctrl+C to stop" -ForegroundColor Gray
+
+# ------------------------------------------------------------------
+# Background watcher: open the browser ONLY after the platform is warm
+# (server up + two consecutive fast responses), so the first page you
+# see always renders in about one second instead of spinning 10-30s.
+# ------------------------------------------------------------------
+Start-Job -ScriptBlock {
+    $url = "http://localhost:5173/"
+    $deadline = (Get-Date).AddMinutes(3)
+    $started = $false
+
+    function Test-WarmupMs {
+        try {
+            $t = Measure-Command {
+                $script:resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 60
+            }
+            if ($resp.StatusCode -eq 200) { return [int]$t.TotalMilliseconds }
+            return -1
+        } catch { return -1 }
+    }
+
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 800
+        $ms = Test-WarmupMs
+        if (-not $started -and $ms -ge 0) {
+            $started = $true
+            continue
+        }
+        if ($started -and $ms -ge 0 -and $ms -lt 1500) {
+            $ms2 = Test-WarmupMs
+            if ($ms2 -ge 0 -and $ms2 -lt 1500) {
+                Start-Process $url
+                break
+            }
+        }
+    }
+} | Out-Null
+
+Write-Host "[3/3] Dev servers are starting (logs below)..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  The browser will open AUTOMATICALLY when the platform is ready." -ForegroundColor Green
+Write-Host "  First launch compiles dependencies: usually 10~30 seconds." -ForegroundColor Gray
+Write-Host "  Close this window (or Ctrl+C) to stop the platform." -ForegroundColor Gray
 Write-Host ""
 
+# Foreground: keep the original behavior (visible logs, Ctrl+C stops all)
 npm run dev
