@@ -184,45 +184,54 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ============ 统计条（Apple 风数据行） ============ */}
-      <Reveal y={28}>
+      {/* ============ 难度统计/筛选条（Apple 对比表式 hairline slim strip） ============ */}
+      <Reveal y={16}>
         <div
-          className="flex md:grid md:grid-cols-5 overflow-x-auto md:overflow-visible rounded-3xl border mb-10 md:mb-14 snap-x snap-mandatory md:snap-none"
-          style={{ borderColor: 'var(--content-border)', background: 'var(--content-card-bg)' }}
+          className="flex overflow-x-auto md:overflow-visible no-scrollbar border-y mb-8 md:mb-12 snap-x snap-mandatory"
+          style={{ borderColor: 'var(--content-border)' }}
         >
-          {LEVEL_ORDER.map((level, i) => {
-            const cfg = difficultyConfig[level]
-            const active = selectedDifficulty === level
+          {[
+            { key: 'all' as const, label: '全部', ageRange: '全部学段', dot: '', count: experiments.length },
+            ...LEVEL_ORDER.map((l) => ({
+              key: l as DifficultyLevel | 'all',
+              label: difficultyConfig[l].label,
+              ageRange: difficultyConfig[l].ageRange,
+              dot: difficultyConfig[l].dot,
+              count: difficultyStats[l],
+            })),
+          ].map((item, i) => {
+            const active = selectedDifficulty === item.key
             return (
               <button
-                key={level}
-                onClick={() => setSelectedDifficulty(active ? 'all' : level)}
-                className={`stat-item group relative shrink-0 snap-start min-w-[108px] md:min-w-0 flex-1 px-3 py-5 md:py-8 text-center transition-colors duration-300 border-l first:border-l-0 ${
+                key={item.key}
+                title={item.ageRange}
+                onClick={() =>
+                  setSelectedDifficulty(item.key === 'all' || active ? 'all' : (item.key as DifficultyLevel))
+                }
+                className={`stat-item group relative shrink-0 snap-start flex-1 min-w-[92px] px-2 py-3 md:py-3.5 flex flex-col items-center justify-center gap-0.5 border-l first:border-l-0 transition-colors duration-300 hover:bg-[var(--bg-muted)] ${
                   active ? 'is-active' : ''
                 }`}
                 style={{ borderColor: 'var(--content-border)' }}
               >
                 <CountUp
-                  value={difficultyStats[level]}
-                  delay={0.15 + i * 0.1}
-                  className="block text-2xl md:text-4xl font-bold tracking-tight transition-transform duration-500 group-hover:scale-110"
+                  value={item.count}
+                  delay={0.1 + i * 0.07}
+                  className="block text-lg md:text-2xl font-bold tabular-nums leading-tight"
                 />
-                <div
-                  className="stat-underline absolute left-1/2 -translate-x-1/2 bottom-0 h-0.5 w-8 md:w-12"
+                <span
+                  className="flex items-center gap-1.5 text-xs md:text-[13px] font-medium leading-tight whitespace-nowrap"
+                  style={{ color: active ? 'var(--content-text)' : 'var(--content-text-muted)' }}
+                >
+                  {item.dot && <span className="w-1.5 h-1.5 rounded-full" style={{ background: item.dot }} />}
+                  {item.label}
+                  <span className="hidden xl:inline text-[10px] font-normal" style={{ color: 'var(--content-text-muted)' }}>
+                    · {item.ageRange}
+                  </span>
+                </span>
+                <span
+                  className="stat-underline absolute left-1/2 -translate-x-1/2 bottom-0 h-0.5 w-8 md:w-10"
                   style={{ background: 'var(--content-accent)' }}
                 />
-                <div className="mt-2 flex items-center justify-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
-                  <span
-                    className="text-xs md:text-sm font-semibold transition-colors"
-                    style={{ color: active ? 'var(--content-accent)' : 'var(--content-text)' }}
-                  >
-                    {cfg.label}
-                  </span>
-                </div>
-                <div className="text-[10px] md:text-xs mt-0.5 hidden md:block" style={{ color: 'var(--content-text-muted)' }}>
-                  {cfg.ageRange}
-                </div>
               </button>
             )
           })}
