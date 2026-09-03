@@ -31,6 +31,7 @@ export default defineConfig({
       'react-plotly.js',
       'fuse.js',
       'pinyin-pro',
+      'lucide-react',
     ],
     // plotly.js 很大，预构建更激进
     esbuildOptions: {
@@ -57,6 +58,19 @@ export default defineConfig({
     // 更快的文件监听
     watch: {
       usePolling: false,
+    },
+    // 🔥 启动即预热：服务一开始就预构建依赖、转换入口模块，
+    // 把首屏编译成本从"用户打开浏览器时"提前到"服务启动阶段"，
+    // 避免第一次打开页面时白屏转圈十几秒
+    warmup: {
+      clientFiles: [
+        './index.html',
+        './src/main.tsx',
+        './src/App.tsx',
+        './src/index.css',
+        // 预转换所有实验页（lazy 路由），首次进入任意实验也是秒开
+        './src/experiments/**/*Experiment.tsx',
+      ],
     },
   },
 })
