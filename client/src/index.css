@@ -624,3 +624,158 @@ main [class*="bg-white"]:has(.js-plotly-plot) {
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-in { animation: fadeIn 0.35s ease-out; }
+
+/* ======================================================================
+ * 主页动效体系（Apple / GPT / Gemini 风：克制、缓入缓出、GPU 友好）
+ * ====================================================================== */
+
+/* —— 故障动态（glitch）：仅在 Hero 标题入场时播放一次 —— */
+@keyframes glitch-in {
+  0%   { opacity: 0; transform: translate3d(-6px, 4px, 0) skewX(-6deg);
+         clip-path: inset(62% 0 8% 0);
+         text-shadow: 3px 0 0 rgba(225, 29, 72, 0.55), -3px 0 0 rgba(14, 165, 233, 0.55); }
+  18%  { opacity: 1; clip-path: inset(12% 0 58% 0);
+         text-shadow: -4px 0 0 rgba(225, 29, 72, 0.5), 4px 0 0 rgba(14, 165, 233, 0.5); }
+  36%  { transform: translate3d(4px, -3px, 0) skewX(4deg);
+         clip-path: inset(40% 0 32% 0);
+         text-shadow: 3px 0 0 rgba(225, 29, 72, 0.45), -3px 0 0 rgba(14, 165, 233, 0.45); }
+  54%  { transform: translate3d(-2px, 2px, 0) skewX(-2deg);
+         clip-path: inset(8% 0 76% 0); }
+  72%  { transform: translate3d(1px, 0, 0); clip-path: inset(0 0 0 0); text-shadow: none; }
+  100% { opacity: 1; transform: translate3d(0,0,0) skewX(0);
+         clip-path: inset(0 0 0 0); text-shadow: none; }
+}
+.animate-glitch-in { animation: glitch-in 0.75s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* —— 液体漂浮：Hero 背景大符号缓慢呼吸/漂移 —— */
+@keyframes liquid-float-a {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-4deg) scale(1); }
+  50%      { transform: translate3d(14px, -22px, 0) rotate(3deg) scale(1.06); }
+}
+@keyframes liquid-float-b {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(6deg) scale(1.04); }
+  50%      { transform: translate3d(-18px, 16px, 0) rotate(-5deg) scale(0.97); }
+}
+.float-symbol-a { animation: liquid-float-a 11s ease-in-out infinite; }
+.float-symbol-b { animation: liquid-float-b 14s ease-in-out infinite; }
+
+/* —— 线条生长（分隔线 / 滚动提示） —— */
+@keyframes line-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.animate-line-grow {
+  transform-origin: left center;
+  animation: line-grow 1.1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes line-drop {
+  0%   { transform: scaleY(0); transform-origin: top; }
+  100% { transform: scaleY(1); transform-origin: top; }
+}
+.animate-line-drop { animation: line-drop 1.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* —— 胶囊标签液体填充：accent 色从底部涌起 —— */
+.liquid-pill {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition: color 0.35s ease, border-color 0.35s ease;
+}
+.liquid-pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--content-accent);
+  border-radius: inherit;
+  transform: translateY(102%);
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.liquid-pill:hover::before,
+.liquid-pill.is-active::before { transform: translateY(0); }
+.liquid-pill:hover,
+.liquid-pill.is-active {
+  color: var(--content-accent-text);
+  border-color: var(--content-accent);
+}
+
+/* —— 卡片图标容器液体填充 —— */
+.liquid-icon {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition: color 0.4s ease, box-shadow 0.4s ease;
+}
+.liquid-icon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -60%;
+  width: 220%;
+  aspect-ratio: 1 / 1;
+  border-radius: 42%;
+  background: var(--content-accent);
+  transform: translateX(-50%) scale(0);
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: -1;
+}
+.group:hover .liquid-icon::after,
+.liquid-icon:hover::after { transform: translateX(-50%) scale(1); }
+.group:hover .liquid-icon,
+.liquid-icon:hover { color: var(--content-accent-text); }
+
+/* —— 卡片 hover 时箭头滑入 —— */
+.card-arrow {
+  transform: translate3d(-6px, 6px, 0);
+  opacity: 0;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+}
+.group:hover .card-arrow {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+}
+
+/* —— 呼吸光点（Hero 顶部小胶囊） —— */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.18); }
+  50%      { opacity: 0.55; box-shadow: 0 0 0 6px rgba(0, 0, 0, 0); }
+}
+.pulse-dot { animation: pulse-dot 2.4s ease-in-out infinite; }
+
+/* —— 统计数字下方细线液体生长 —— */
+.stat-underline {
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.group:hover .stat-underline,
+.stat-item.is-active .stat-underline { transform: scaleX(1); }
+
+/* —— 隐藏横向滚动条（胶囊筛选区移动端横滑） —— */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* —— 尊重减少动态偏好：所有装饰动画关闭 —— */
+@media (prefers-reduced-motion: reduce) {
+  .animate-glitch-in,
+  .float-symbol-a,
+  .float-symbol-b,
+  .animate-line-grow,
+  .animate-line-drop,
+  .pulse-dot {
+    animation: none !important;
+  }
+  .liquid-pill::before,
+  .liquid-icon::after,
+  .card-arrow,
+  .stat-underline {
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}

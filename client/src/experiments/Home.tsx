@@ -1,44 +1,77 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { Search, ArrowUpRight, Heart, SearchX, Film, ListOrdered, Sigma } from 'lucide-react'
 import { experiments } from './catalog'
 import type { DifficultyLevel, Experiment } from './catalog'
-import { buildIndex, makeFuse, searchExperiments } from './searchExperiments'
-import { pathIconMap, topicIconMap, resolveIcon } from '../utils/iconMap'
+import { makeFuse, buildIndex, searchExperiments } from './searchExperiments'
+import { topicIconMap, resolveIcon } from '../utils/iconMap'
+import { Reveal, CountUp } from '../components/motion/Reveal'
 
-// 难度等级配置 - 使用更精美的渐变色
-const difficultyConfig: Record<DifficultyLevel, { label: string; color: string; bgColor: string; gradient: string; ageRange: string }> = {
-  beginner: { label: '入门级', color: 'text-emerald-700', bgColor: 'bg-emerald-50', gradient: 'from-emerald-400 to-teal-500', ageRange: '小学 6-12岁' },
-  elementary: { label: '基础级', color: 'text-blue-700', bgColor: 'bg-blue-50', gradient: 'from-blue-400 to-indigo-500', ageRange: '初中 12-15岁' },
-  intermediate: { label: '中级', color: 'text-amber-700', bgColor: 'bg-amber-50', gradient: 'from-amber-400 to-orange-500', ageRange: '高中 15-18岁' },
-  advanced: { label: '高级', color: 'text-purple-700', bgColor: 'bg-purple-50', gradient: 'from-purple-400 to-pink-500', ageRange: '大学本科' },
-  expert: { label: '专业级', color: 'text-rose-700', bgColor: 'bg-rose-50', gradient: 'from-rose-400 to-red-500', ageRange: '研究生+' },
+// ------------------------------------------------------------------
+// 难度配置：黑白简约体系，仅保留一个彩色圆点作为难度识别
+// ------------------------------------------------------------------
+const difficultyConfig: Record<
+  DifficultyLevel,
+  { label: string; ageRange: string; dot: string }
+> = {
+  beginner:     { label: '入门级', ageRange: '小学 6-12 岁', dot: '#10b981' },
+  elementary:   { label: '基础级', ageRange: '初中 12-15 岁', dot: '#3b82f6' },
+  intermediate: { label: '中级',   ageRange: '高中 15-18 岁', dot: '#f59e0b' },
+  advanced:     { label: '高级',   ageRange: '大学本科',      dot: '#8b5cf6' },
+  expert:       { label: '专业级', ageRange: '研究生 +',      dot: '#f43f5e' },
 }
+const LEVEL_ORDER = Object.keys(difficultyConfig) as DifficultyLevel[]
 
-// 主题分类
 const topicCategories = [
-  { id: 'geometry', label: '几何', icon: '📐' },
-  { id: 'algebra', label: '代数', icon: '🔢' },
-  { id: 'calculus', label: '微积分', icon: '∫' },
-  { id: 'probability', label: '概率统计', icon: '🎲' },
-  { id: 'linear-algebra', label: '线性代数', icon: '▦' },
-  { id: 'analysis', label: '分析', icon: '📈' },
-  { id: 'discrete', label: '离散数学', icon: '🔗' },
-  { id: 'applied', label: '应用数学', icon: '⚙️' },
+  { id: 'geometry',       label: '几何' },
+  { id: 'algebra',        label: '代数' },
+  { id: 'calculus',       label: '微积分' },
+  { id: 'probability',    label: '概率统计' },
+  { id: 'linear-algebra', label: '线性代数' },
+  { id: 'analysis',       label: '分析' },
+  { id: 'discrete',       label: '离散数学' },
+  { id: 'applied',        label: '应用数学' },
 ]
 
-// 按难度分组
-const groupByDifficulty = (exps: Experiment[]) => {
+// Hero 背景叠层符号（错位 + 不同视差速度 + 液体漂浮）
+const HERO_SYMBOLS = [
+  { char: '∑', className: 'top-[-6%] right-[4%]  text-[180px] md:text-[260px]', speed: 0.10,  float: 'float-symbol-a' },
+  { char: '∫', className: 'top-[38%] left-[-4%] text-[220px] md:text-[320px]', speed: -0.07, float: 'float-symbol-b' },
+  { char: 'π', className: 'bottom-[-10%] right-[16%] text-[150px] md:text-[210px]', speed: 0.06, float: 'float-symbol-b' },
+  { char: '∞', className: 'top-[16%] right-[32%] text-[110px] md:text-[160px] hidden md:block', speed: -0.12, float: 'float-symbol-a' },
+  { char: '√', className: 'bottom-[8%] left-[24%] text-[130px] md:text-[190px] hidden md:block', speed: 0.14, float: 'float-symbol-b' },
+]
+
+function groupByDifficulty(exps: Experiment[]) {
   const groups: Record<DifficultyLevel, Experiment[]> = {
-    beginner: [],
-    elementary: [],
-    intermediate: [],
-    advanced: [],
-    expert: [],
+    beginner: [], elementary: [], intermediate: [], advanced: [], expert: [],
   }
-  exps.forEach((exp) => {
-    groups[exp.difficulty].push(exp)
-  })
+  exps.forEach((e) => groups[e.difficulty].push(e))
   return groups
+}
+
+/** Hero 背景符号视差：scroll 时 rAF 合帧，直接写 DOM transform（外层管视差，内层管漂浮） */
+function useParallax() {
+  const layersRef = useRef<(HTMLDivElement | null)[]>([])
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    let raf = 0
+    const onScroll = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const y = window.scrollY
+        layersRef.current.forEach((el, i) => {
+          if (el) el.style.transform = `translate3d(0, ${(y * HERO_SYMBOLS[i].speed).toFixed(1)}px, 0)`
+        })
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      cancelAnimationFrame(raf)
+    }
+  }, [])
+  return layersRef
 }
 
 export default function Home() {
@@ -46,261 +79,360 @@ export default function Home() {
   const [selectedTopic, setSelectedTopic] = useState<string | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // 判断是否情人节前后（2月12日-2月16日）
   const now = new Date()
   const isValentineSeason = now.getMonth() === 1 && now.getDate() >= 12 && now.getDate() <= 16
 
-  // 预建拼音索引 + Fuse 实例(仅一次)，供拼音首字母/全拼/模糊/多关键词搜索
   const fuse = useMemo(() => makeFuse(buildIndex(experiments)), [])
-
-  // 先按搜索命中(支持拼音/模糊/多关键词 AND)，再叠加难度/主题筛选
   const searchMatched = useMemo(
     () => searchExperiments(experiments, searchQuery, fuse),
     [searchQuery, fuse],
   )
-  const filteredExperiments = searchMatched.filter((exp) => {
-    const matchesDifficulty = selectedDifficulty === 'all' || exp.difficulty === selectedDifficulty
-    const matchesTopic = selectedTopic === 'all' || exp.topics.includes(selectedTopic)
-    return matchesDifficulty && matchesTopic
-  })
-
+  const filteredExperiments = searchMatched.filter(
+    (exp) =>
+      (selectedDifficulty === 'all' || exp.difficulty === selectedDifficulty) &&
+      (selectedTopic === 'all' || exp.topics.includes(selectedTopic)),
+  )
   const groupedExperiments = groupByDifficulty(filteredExperiments)
 
-  // 统计各难度数量
-  const difficultyStats = {
-    beginner: experiments.filter((e) => e.difficulty === 'beginner').length,
-    elementary: experiments.filter((e) => e.difficulty === 'elementary').length,
-    intermediate: experiments.filter((e) => e.difficulty === 'intermediate').length,
-    advanced: experiments.filter((e) => e.difficulty === 'advanced').length,
-    expert: experiments.filter((e) => e.difficulty === 'expert').length,
-  }
+  const difficultyStats = useMemo(() => {
+    const stats = {} as Record<DifficultyLevel, number>
+    LEVEL_ORDER.forEach((l) => (stats[l] = experiments.filter((e) => e.difficulty === l).length))
+    return stats
+  }, [])
+
+  const layersRef = useParallax()
 
   return (
-    <div className="max-w-7xl mx-auto">
-
-      {/* 情人节横幅 */}
+    <div className="relative max-w-7xl mx-auto">
+      {/* ============ 情人节横幅 ============ */}
       {isValentineSeason && (
         <Link
           to="/valentine"
-          className="block w-full mb-6 md:mb-10 group relative overflow-hidden rounded-2xl border border-pink-200/50 bg-gradient-to-r from-pink-50 via-rose-50 to-red-50 p-4 md:p-6 text-left hover:shadow-xl hover:shadow-pink-200/30 transition-all duration-500"
+          className="group relative block overflow-hidden rounded-3xl border border-rose-200 bg-[#fff1f3] p-4 md:p-5 mb-10 md:mb-14 transition-shadow duration-500 hover:shadow-[0_20px_44px_-18px_rgba(244,63,94,0.35)]"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-pink-400/5 via-rose-400/10 to-red-400/5 group-hover:from-pink-400/10 group-hover:via-rose-400/15 group-hover:to-red-400/10 transition-all duration-500" />
-          <div className="relative flex items-center gap-3 md:gap-5">
-            <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center shadow-lg shadow-pink-400/30 group-hover:scale-110 transition-transform duration-500">
-              <span className="text-2xl md:text-3xl">💕</span>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/30 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-6">
+              <Heart className="w-6 h-6 md:w-7 md:h-7 text-white" fill="currentColor" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-base md:text-xl font-bold bg-gradient-to-r from-pink-600 via-rose-500 to-red-500 bg-clip-text text-transparent">
-                情人节快乐！四种数学表白函数
-              </div>
-              <div className="text-pink-500/70 text-xs md:text-sm mt-1">
+              <div className="text-base md:text-lg font-bold text-rose-600">情人节快乐 · 四种数学表白函数</div>
+              <div className="text-rose-400 text-xs md:text-sm mt-0.5">
                 心形参数方程 · 笛卡尔心形线 · 隐函数心形 · 简洁心形 — 点击查看沉浸式动画
               </div>
             </div>
-            <div className="text-pink-400 group-hover:translate-x-1 transition-transform">
-              <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
+            <ArrowUpRight className="w-5 h-5 md:w-6 md:h-6 text-rose-400 transition-transform duration-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </div>
         </Link>
       )}
 
-      {/* 头部 - 更精美的设计 */}
-      <header className="mb-6 md:mb-10">
-        <div className="flex items-center gap-3 md:gap-4 mb-3">
-          <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-xl shadow-indigo-500/30">
-            <span className="text-2xl md:text-3xl text-white">∑</span>
-          </div>
-          <div>
-            <h1 className="text-2xl md:text-4xl font-bold bg-gradient-to-r from-slate-800 via-indigo-700 to-purple-700 bg-clip-text text-transparent">
-              数学之美
-            </h1>
-            <p className="text-slate-500 text-sm md:text-base mt-0.5 md:mt-1">
-              通过交互式可视化，探索数学的奥秘与美感
-            </p>
-          </div>
-        </div>
-      </header>
-
-      {/* 统计卡片 - 移动端横向滚动 */}
-      <div className="mb-6 md:mb-10 -mx-4 px-4 md:mx-0 md:px-0">
-        <div className="flex md:grid md:grid-cols-5 gap-3 md:gap-4 overflow-x-auto pb-2 md:pb-0 snap-x snap-mandatory md:snap-none">
-          {(Object.keys(difficultyConfig) as DifficultyLevel[]).map((level) => (
-            <button
-              key={level}
-              onClick={() => setSelectedDifficulty(selectedDifficulty === level ? 'all' : level)}
-              className={`relative flex-shrink-0 w-32 md:w-auto p-4 md:p-5 rounded-2xl border-2 transition-all duration-300 overflow-hidden group snap-start ${
-                selectedDifficulty === level
-                  ? 'border-indigo-400 shadow-lg shadow-indigo-500/20 scale-[1.02]'
-                  : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
-              }`}
+      {/* ============ HERO ============ */}
+      <section className="relative overflow-hidden pt-6 md:pt-16 pb-12 md:pb-20">
+        {/* 背景叠层：错位数学符号，视差 + 液体漂浮 */}
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          {HERO_SYMBOLS.map((s, i) => (
+            <div
+              key={i}
+              ref={(el) => { layersRef.current[i] = el }}
+              className={`absolute ${s.className} will-change-transform`}
             >
-              {/* 背景渐变装饰 */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${difficultyConfig[level].gradient} opacity-0 group-hover:opacity-5 transition-opacity`} />
-
-              <div className={`text-2xl md:text-3xl font-bold bg-gradient-to-r ${difficultyConfig[level].gradient} bg-clip-text text-transparent`}>
-                {difficultyStats[level]}
-              </div>
-              <div className="text-xs md:text-sm font-semibold text-slate-700 mt-1">{difficultyConfig[level].label}</div>
-              <div className="text-xs text-slate-400 mt-0.5 hidden md:block">{difficultyConfig[level].ageRange}</div>
-            </button>
+              <span
+                className={`block font-serif font-bold leading-none select-none ${s.float}`}
+                style={{ color: 'var(--content-text)', opacity: 0.055 }}
+              >
+                {s.char}
+              </span>
+            </div>
           ))}
         </div>
-      </div>
 
-      {/* 筛选栏 - 玻璃态设计 */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-200/50 p-4 md:p-5 mb-6 md:mb-10">
-        <div className="space-y-3 md:space-y-0 md:flex md:flex-wrap md:gap-4 md:items-center">
-          {/* 搜索框 */}
-          <div className="w-full md:flex-1 md:min-w-[200px] relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+        <div className="relative">
+          <Reveal y={16} duration={0}>
+            <div
+              className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs md:text-sm font-medium"
+              style={{ borderColor: 'var(--content-border)', color: 'var(--content-text-muted)', background: 'var(--content-card-bg)' }}
+            >
+              <span className="pulse-dot w-1.5 h-1.5 rounded-full" style={{ background: 'var(--content-accent)' }} />
+              交互式数学可视化平台
             </div>
-            <input
-              type="text"
-              placeholder="搜索实验..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none text-base"
-            />
-          </div>
+          </Reveal>
 
-          {/* 主题筛选 - 移动端横向滚动 */}
-          <div className="-mx-4 px-4 md:mx-0 md:px-0">
-            <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0 md:flex-wrap">
+          <h1
+            className="animate-glitch-in mt-6 md:mt-8 text-[clamp(2.75rem,7vw,5.75rem)] font-bold tracking-tight leading-[1.05]"
+            style={{ color: 'var(--content-text)' }}
+          >
+            数学之美
+          </h1>
+
+          <Reveal y={24} delay={0.25}>
+            <p
+              className="mt-5 md:mt-6 max-w-2xl text-base md:text-2xl leading-relaxed"
+              style={{ color: 'var(--content-text-muted)' }}
+            >
+              通过交互式可视化，探索数学的奥秘与美感。
+              <br className="hidden md:block" />
+              拖动参数、改变条件，让每一个抽象概念在你眼前流动起来。
+            </p>
+          </Reveal>
+
+          {/* 滚动提示：线条下落 */}
+          <Reveal delay={0.6} y={10}>
+            <div className="mt-10 md:mt-14 flex items-center gap-3" style={{ color: 'var(--content-text-muted)' }}>
+              <div className="animate-line-drop w-px h-10" style={{ background: 'var(--content-text-muted)', opacity: 0.4 }} />
+              <span className="text-xs tracking-widest uppercase">Scroll to explore</span>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============ 统计条（Apple 风数据行） ============ */}
+      <Reveal y={28}>
+        <div
+          className="flex md:grid md:grid-cols-5 overflow-x-auto md:overflow-visible rounded-3xl border mb-10 md:mb-14 snap-x snap-mandatory md:snap-none"
+          style={{ borderColor: 'var(--content-border)', background: 'var(--content-card-bg)' }}
+        >
+          {LEVEL_ORDER.map((level, i) => {
+            const cfg = difficultyConfig[level]
+            const active = selectedDifficulty === level
+            return (
+              <button
+                key={level}
+                onClick={() => setSelectedDifficulty(active ? 'all' : level)}
+                className={`stat-item group relative shrink-0 snap-start min-w-[108px] md:min-w-0 flex-1 px-3 py-5 md:py-8 text-center transition-colors duration-300 border-l first:border-l-0 ${
+                  active ? 'is-active' : ''
+                }`}
+                style={{ borderColor: 'var(--content-border)' }}
+              >
+                <CountUp
+                  value={difficultyStats[level]}
+                  delay={0.15 + i * 0.1}
+                  className="block text-2xl md:text-4xl font-bold tracking-tight transition-transform duration-500 group-hover:scale-110"
+                />
+                <div
+                  className="stat-underline absolute left-1/2 -translate-x-1/2 bottom-0 h-0.5 w-8 md:w-12"
+                  style={{ background: 'var(--content-accent)' }}
+                />
+                <div className="mt-2 flex items-center justify-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
+                  <span
+                    className="text-xs md:text-sm font-semibold transition-colors"
+                    style={{ color: active ? 'var(--content-accent)' : 'var(--content-text)' }}
+                  >
+                    {cfg.label}
+                  </span>
+                </div>
+                <div className="text-[10px] md:text-xs mt-0.5 hidden md:block" style={{ color: 'var(--content-text-muted)' }}>
+                  {cfg.ageRange}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </Reveal>
+
+      {/* ============ 筛选栏（sticky 玻璃态） ============ */}
+      <Reveal y={20}>
+        <div
+          className="sticky top-3 md:top-5 z-30 rounded-3xl border p-3 md:p-4 mb-10 md:mb-14 backdrop-blur-xl"
+          style={{
+            borderColor: 'var(--content-border)',
+            background: 'color-mix(in srgb, var(--content-card-bg) 82%, transparent)',
+          }}
+        >
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
+            <div className="relative md:w-72 shrink-0">
+              <Search
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 w-[18px] h-[18px]"
+                style={{ color: 'var(--content-text-muted)' }}
+              />
+              <input
+                type="text"
+                placeholder="搜索实验…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 rounded-full border text-sm outline-none transition-all duration-300 focus:scale-[1.02]"
+                style={{
+                  borderColor: 'var(--content-border)',
+                  background: 'var(--bg-muted)',
+                  color: 'var(--content-text)',
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--content-accent)')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--content-border)')}
+              />
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 md:flex-wrap no-scrollbar">
               <button
                 onClick={() => setSelectedTopic('all')}
-                className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  selectedTopic === 'all'
-                    ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/25'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                className={`liquid-pill shrink-0 px-4 py-2 rounded-full text-xs md:text-sm font-medium border ${selectedTopic === 'all' ? 'is-active' : ''}`}
+                style={{
+                  borderColor: 'var(--content-border)',
+                  color: selectedTopic === 'all' ? 'var(--content-accent-text)' : 'var(--content-text-muted)',
+                }}
               >
                 全部
               </button>
-              {topicCategories.map((topic) => (
-                <button
-                  key={topic.id}
-                  onClick={() => setSelectedTopic(selectedTopic === topic.id ? 'all' : topic.id)}
-                  className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                    selectedTopic === topic.id
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/25'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {(() => {
-                    const IconComp = topicIconMap[topic.id]
-                    if (IconComp) return <IconComp className="w-4 h-4 inline-block -mt-0.5 mr-1.5" />
-                    return <span className="mr-1">{topic.icon}</span>
-                  })()}
-                  {topic.label}
-                </button>
-              ))}
+              {topicCategories.map((topic) => {
+                const IconComp = topicIconMap[topic.id] || Sigma
+                const active = selectedTopic === topic.id
+                return (
+                  <button
+                    key={topic.id}
+                    onClick={() => setSelectedTopic(active ? 'all' : topic.id)}
+                    className={`liquid-pill shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-xs md:text-sm font-medium border whitespace-nowrap ${active ? 'is-active' : ''}`}
+                    style={{
+                      borderColor: 'var(--content-border)',
+                      color: active ? 'var(--content-accent-text)' : 'var(--content-text-muted)',
+                    }}
+                  >
+                    <IconComp className="w-3.5 h-3.5" />
+                    {topic.label}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>
-      </div>
+      </Reveal>
 
-      {/* 实验列表 - 按难度分组 */}
+      {/* ============ 实验列表 ============ */}
       {selectedDifficulty === 'all' ? (
-        // 显示所有分组
-        (Object.keys(difficultyConfig) as DifficultyLevel[]).map((level) => {
-          const levelExperiments = groupedExperiments[level]
-          if (levelExperiments.length === 0) return null
-
+        LEVEL_ORDER.map((level, sectionIdx) => {
+          const list = groupedExperiments[level]
+          if (list.length === 0) return null
+          const cfg = difficultyConfig[level]
           return (
-            <section key={level} className="mb-8 md:mb-12">
-              <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-5">
-                <div className={`w-1 md:w-1.5 h-6 md:h-8 rounded-full bg-gradient-to-b ${difficultyConfig[level].gradient}`} />
+            <section key={level} className="mb-12 md:mb-20 scroll-mt-32">
+              <Reveal y={20} className="relative mb-6 md:mb-9">
+                {/* 叠层大序号：错位美感 */}
                 <span
-                  className={`px-3 md:px-4 py-1 md:py-1.5 rounded-full text-xs md:text-sm font-semibold ${difficultyConfig[level].bgColor} ${difficultyConfig[level].color}`}
+                  aria-hidden="true"
+                  className="pointer-events-none select-none absolute -top-10 md:-top-14 left-0 text-[72px] md:text-[120px] font-bold leading-none tracking-tighter"
+                  style={{ color: 'var(--content-text)', opacity: 0.05 }}
                 >
-                  {difficultyConfig[level].label}
+                  {String(sectionIdx + 1).padStart(2, '0')}
                 </span>
-                <span className="text-slate-400 text-xs md:text-sm hidden sm:inline">{difficultyConfig[level].ageRange}</span>
-                <span className="text-slate-300 text-xs md:text-sm hidden sm:inline">·</span>
-                <span className="text-slate-400 text-xs md:text-sm">{levelExperiments.length} 个</span>
-              </div>
+                <div className="relative flex items-baseline gap-3 md:gap-4 pl-1">
+                  <span className="w-2 h-2 md:w-2.5 md:h-2.5 rounded-full shrink-0 translate-y-[-2px]" style={{ background: cfg.dot }} />
+                  <h2 className="text-xl md:text-2xl font-bold tracking-tight" style={{ color: 'var(--content-text)' }}>
+                    {cfg.label}
+                  </h2>
+                  <span className="text-xs md:text-sm" style={{ color: 'var(--content-text-muted)' }}>
+                    {cfg.ageRange}
+                  </span>
+                  <span className="text-xs md:text-sm" style={{ color: 'var(--content-text-muted)', opacity: 0.6 }}>
+                    · {list.length} 个实验
+                  </span>
+                </div>
+              </Reveal>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-                {levelExperiments.map((exp) => (
-                  <ExperimentCard key={exp.path} experiment={exp} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                {list.map((exp, i) => (
+                  <Reveal key={exp.path} y={28} delay={Math.min(i * 0.06, 0.42)} scale={0.97}>
+                    <ExperimentCard experiment={exp} />
+                  </Reveal>
                 ))}
               </div>
             </section>
           )
         })
       ) : (
-        // 显示单个分组
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-          {filteredExperiments.map((exp) => (
-            <ExperimentCard key={exp.path} experiment={exp} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          {filteredExperiments.map((exp, i) => (
+            <Reveal key={exp.path} y={28} delay={Math.min(i * 0.06, 0.42)} scale={0.97}>
+              <ExperimentCard experiment={exp} />
+            </Reveal>
           ))}
         </div>
       )}
 
-      {/* 空状态 */}
+      {/* ============ 空状态 ============ */}
       {filteredExperiments.length === 0 && (
-        <div className="text-center py-12 md:py-16">
-          <div className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
-            <span className="text-3xl md:text-4xl">🔍</span>
+        <Reveal y={20}>
+          <div className="text-center py-20 md:py-28">
+            <div
+              className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-5 rounded-3xl flex items-center justify-center"
+              style={{ background: 'var(--bg-muted)', color: 'var(--content-text-muted)' }}
+            >
+              <SearchX className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg md:text-xl font-bold mb-1.5" style={{ color: 'var(--content-text)' }}>
+              没有找到匹配的实验
+            </h3>
+            <p className="text-sm" style={{ color: 'var(--content-text-muted)' }}>
+              试试更换关键词，或重置筛选条件
+            </p>
           </div>
-          <h3 className="text-base md:text-lg font-semibold text-slate-700 mb-2">没有找到匹配的实验</h3>
-          <p className="text-slate-500 text-sm md:text-base">尝试调整筛选条件或搜索关键词</p>
-        </div>
+        </Reveal>
       )}
     </div>
   )
 }
 
-// 实验卡片组件
+// ------------------------------------------------------------------
+// 实验卡片：液体填充图标 + hover 上浮 + 箭头滑入
+// ------------------------------------------------------------------
 function ExperimentCard({ experiment }: { experiment: Experiment }) {
-  const config = difficultyConfig[experiment.difficulty]
+  const cfg = difficultyConfig[experiment.difficulty]
+  const IconComp = resolveIcon(experiment.path)
 
   return (
     <Link
       to={experiment.path}
-      className="group block p-4 md:p-5 bg-white rounded-xl md:rounded-2xl shadow-sm border border-slate-200/50 hover:shadow-xl hover:shadow-slate-200/50 hover:border-indigo-200 transition-all duration-300 active:scale-[0.98] md:hover:-translate-y-1"
+      className="group relative flex h-full flex-col rounded-3xl border p-6 md:p-7 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:shadow-[0_28px_56px_-20px_rgba(0,0,0,0.18)] active:scale-[0.98]"
+      style={{ background: 'var(--content-card-bg)', borderColor: 'var(--content-border)' }}
     >
-      <div className="flex items-start gap-3 md:gap-4">
+      <div className="flex items-start justify-between">
         <div
-          className="icon-holder w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-300"
-          style={{
-            background: 'var(--content-accent)',
-            color: 'var(--content-accent-text)',
-          }}
+          className="liquid-icon w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center"
+          style={{ background: 'var(--bg-muted)', color: 'var(--content-text)' }}
         >
-          {(() => {
-            const IconComp = resolveIcon(experiment.path)
-            return <IconComp className="w-5 h-5 md:w-6 md:h-6" />
-          })()}
+          <IconComp className="w-6 h-6" />
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 md:mb-1.5">
-            <h2 className="text-base md:text-lg font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">
-              {experiment.title}
-            </h2>
-          </div>
-          <p className="text-slate-500 text-xs md:text-sm line-clamp-2 mb-2 md:mb-3 leading-relaxed">{experiment.description}</p>
-          <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
-            <span className={`px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-xs font-semibold ${config.bgColor} ${config.color}`}>
-              {config.label}
-            </span>
-            {experiment.hasAnimation && (
-              <span className="px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-xs font-medium bg-violet-50 text-violet-600">
-                动画
-              </span>
-            )}
-            {experiment.hasSteps && (
-              <span className="px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-xs font-medium bg-cyan-50 text-cyan-600 hidden sm:inline-block">
-                步骤
-              </span>
-            )}
-          </div>
-        </div>
+        <ArrowUpRight
+          className="card-arrow w-5 h-5"
+          style={{ color: 'var(--content-text)' }}
+        />
+      </div>
+
+      <h3
+        className="mt-5 text-base md:text-lg font-bold tracking-tight"
+        style={{ color: 'var(--content-text)' }}
+      >
+        {experiment.title}
+      </h3>
+      <p
+        className="mt-2 text-xs md:text-sm leading-relaxed line-clamp-2 flex-1"
+        style={{ color: 'var(--content-text-muted)' }}
+      >
+        {experiment.description}
+      </p>
+
+      <div className="mt-4 flex items-center gap-1.5 flex-wrap">
+        <span
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
+          style={{ background: 'var(--bg-muted)', color: 'var(--content-text-muted)' }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
+          {cfg.label}
+        </span>
+        {experiment.hasAnimation && (
+          <span
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium"
+            style={{ background: 'var(--bg-muted)', color: 'var(--content-text-muted)' }}
+          >
+            <Film className="w-3 h-3" />
+            动画
+          </span>
+        )}
+        {experiment.hasSteps && (
+          <span
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium hidden sm:inline-flex"
+            style={{ background: 'var(--bg-muted)', color: 'var(--content-text-muted)' }}
+          >
+            <ListOrdered className="w-3 h-3" />
+            步骤
+          </span>
+        )}
       </div>
     </Link>
   )
