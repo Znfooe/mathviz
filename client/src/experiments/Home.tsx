@@ -146,7 +146,7 @@ export default function Home() {
         </div>
 
         <div className="relative">
-          <Reveal y={16} duration={0}>
+          <Reveal y={16}>
             <div
               className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs md:text-sm font-medium"
               style={{ borderColor: 'var(--content-border)', color: 'var(--content-text-muted)', background: 'var(--content-card-bg)' }}

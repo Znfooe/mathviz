@@ -66,16 +66,6 @@ export default function ThemePicker() {
     }
   }
 
-  function deriveDefaultAccent(bg: string): string {
-    // 默认 accent：浅色背景用黑，深色背景用淡绿
-    return isDark(bg) ? '#6ee7b7' : '#111111'
-  }
-
-  function isDark(hex: string): boolean {
-    const h = hex.replace('#', '')
-    return (parseInt(h.substr(0,2),16)*0.299 + parseInt(h.substr(2,2),16)*0.587 + parseInt(h.substr(4,2),16)*0.114) / 255 < 0.5
-  }
-
   const isPresetActive = (p: typeof PRESETS[number]) =>
     theme.bg === p.bg
 

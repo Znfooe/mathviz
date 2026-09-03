@@ -1,4 +1,5 @@
-import { CSSProperties, ElementType, ReactNode, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties, ElementType, ReactNode } from 'react'
 import { useInView } from '../../hooks/useInView'
 
 // Apple 风缓动：快速起步、悠长收尾

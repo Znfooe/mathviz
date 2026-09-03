@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect } from 'react'
 import { useFullscreenParam } from '../../contexts/FullscreenParamContext'
 
 interface SliderParam {
@@ -22,7 +22,6 @@ export default function ParameterPanel({ title, params, onChange, className = ''
   // 自动向全屏系统注册自己，让全屏模式也能调参数
   const { registerPanel, unregisterPanel } = useFullscreenParam()
   useEffect(() => {
-    let panelRef: HTMLDivElement | null = null
     registerPanel(() => {
       // 这个函数会在 ThemedPlot 全屏 overlay 里被调用
       // 直接复用当前组件的 props 渲染一个独立实例

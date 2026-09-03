@@ -1,12 +1,13 @@
-﻿﻿import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import {
-  Sprout, BookOpen, Book, GraduationCap, FlaskConical, ChevronRight, Search, X,
+  Sprout, BookOpen, Book, GraduationCap, FlaskConical, ChevronRight, Search, X, RefreshCw,
 } from 'lucide-react'
 import ThemePicker from '../ThemePicker'
 import { resolveIcon } from '../../utils/iconMap'
 import { buildPinyinIndex } from '../../experiments/searchExperiments'
+import { CHECK_UPDATE_EVENT } from '../Update/UpdateManager'
 
 interface NavCategory {
   name: string
@@ -781,6 +782,46 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </span>
         </div>
         <ThemePicker />
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent(CHECK_UPDATE_EVENT))}
+          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-colors duration-200 hover:opacity-80"
+          style={{ borderColor: 'var(--sidebar-border)', color: 'var(--sidebar-text-muted)' }}
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          检测更新
+        </button>
+        <div
+          className="mt-3 pt-3 border-t flex items-center justify-center gap-1"
+          style={{ borderColor: 'var(--sidebar-border)' }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className="w-3.5 h-3.5 shrink-0"
+            style={{ color: 'var(--sidebar-text-muted)' }}
+            aria-hidden="true"
+          >
+            <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.17c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.25 5.68.41.35.77 1.05.77 2.12v3.14c0 .31.21.67.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z" />
+          </svg>
+          {[
+            { label: '项目主页', href: 'https://github.com/Znfooe/mathviz' },
+            { label: '问题反馈', href: 'https://github.com/Znfooe/mathviz/issues' },
+            { label: '关于作者', href: 'https://github.com/Znfooe' },
+          ].map((link, i) => (
+            <span key={link.href} className="flex items-center">
+              {i > 0 && <span className="mx-1 opacity-40">·</span>}
+              <a
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] no-underline hover:underline underline-offset-2 transition-opacity hover:opacity-100"
+                style={{ color: 'var(--sidebar-text-muted)', opacity: 0.85 }}
+              >
+                {link.label}
+              </a>
+            </span>
+          ))}
+        </div>
       </div>
     </aside>
   )

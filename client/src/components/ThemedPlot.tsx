@@ -1,7 +1,10 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import type { ComponentProps } from 'react'
 import { createPortal } from 'react-dom'
-import Plot, { PlotParams } from 'react-plotly.js'
+import Plot from 'react-plotly.js'
 import { useFullscreenParam } from '../contexts/FullscreenParamContext'
+
+type PlotParams = ComponentProps<typeof Plot>
 
 /**
  * 主题化 Plotly 组件
@@ -125,7 +128,7 @@ export default function ThemedPlot(props: PlotParams & { title?: string }) {
     modeBarButtonsToRemove: [
       'lasso2d', 'select2d', 'toggleSpikelines',
       'hoverClosestCartesian', 'hoverCompareCartesian',
-    ],
+    ] as PlotParams['config'] extends infer C ? C extends { modeBarButtonsToRemove?: infer T } ? T : never : never,
     ...props.config,
   }
 

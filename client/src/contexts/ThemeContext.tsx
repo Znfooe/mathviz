@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import type { ReactNode } from 'react'
 
 // ============ 预设方案 ============
 export interface ThemePreset {
@@ -34,7 +35,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | null>(null)
 
 const STORAGE_KEY = 'mathviz-theme-v5'
-const DEFAULT: ThemeState = PRESETS[0]
+const DEFAULT: ThemePreset = PRESETS[0]
 
 // ============ 颜色工具函数 ============
 function hexToRgb(hex: string): [number, number, number] {

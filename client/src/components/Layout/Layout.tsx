@@ -6,6 +6,7 @@ import { ThemeProvider } from '../../contexts/ThemeContext'
 import { FullscreenParamProvider } from '../../contexts/FullscreenParamContext'
 import { NarrationController } from '../NarrationController'
 import { BugReportButton } from '../BugReport'
+import UpdateManager from '../Update/UpdateManager'
 import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
 function LayoutContent() {
@@ -96,6 +97,9 @@ function LayoutContent() {
 
       {/* Bug 报告按钮 - 仅在实验页面显示 */}
       {isExperimentPage && <BugReportButton experimentPath={experimentPath} />}
+
+      {/* 自动更新管理器（发布包生效；dev/静态部署自动静默） */}
+      <UpdateManager />
     </div>
   )
 }
