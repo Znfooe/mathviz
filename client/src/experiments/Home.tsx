@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, ArrowUpRight, Heart, SearchX, Film, ListOrdered, Sigma } from 'lucide-react'
+import { Search, ArrowUpRight, Heart, SearchX, Film, ListOrdered, Sigma, Star } from 'lucide-react'
 import { experiments } from './catalog'
 import type { DifficultyLevel, Experiment } from './catalog'
 import { makeFuse, buildIndex, searchExperiments } from './searchExperiments'
 import { topicIconMap, resolveIcon } from '../utils/iconMap'
 import { Reveal, CountUp } from '../components/motion/Reveal'
+import { useFavorites } from '../contexts/FavoritesContext'
 
 // ------------------------------------------------------------------
 // 难度配置：黑白简约体系，仅保留一个彩色圆点作为难度识别
@@ -383,6 +384,8 @@ export default function Home() {
 function ExperimentCard({ experiment }: { experiment: Experiment }) {
   const cfg = difficultyConfig[experiment.difficulty]
   const IconComp = resolveIcon(experiment.path)
+  const { isFavorite, toggleFavorite } = useFavorites()
+  const fav = isFavorite(experiment.path)
 
   return (
     <Link
@@ -397,10 +400,32 @@ function ExperimentCard({ experiment }: { experiment: Experiment }) {
         >
           <IconComp className="w-6 h-6" />
         </div>
-        <ArrowUpRight
-          className="card-arrow w-5 h-5"
-          style={{ color: 'var(--content-text)' }}
-        />
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              toggleFavorite(experiment.path)
+            }}
+            aria-label={fav ? `取消收藏 ${experiment.title}` : `收藏 ${experiment.title}`}
+            aria-pressed={fav}
+            title={fav ? '取消收藏' : '收藏'}
+            className={`p-2 rounded-full transition-all duration-300 hover:scale-110 active:scale-95 ${
+              fav ? 'opacity-100' : 'opacity-35 group-hover:opacity-70'
+            }`}
+          >
+            <Star
+              className={`w-5 h-5 transition-all duration-300 ${
+                fav ? 'fill-amber-400 text-amber-400 drop-shadow-[0_2px_6px_rgba(251,191,36,0.45)]' : ''
+              }`}
+              style={fav ? undefined : { color: 'var(--content-text)' }}
+            />
+          </button>
+          <ArrowUpRight
+            className="card-arrow w-5 h-5"
+            style={{ color: 'var(--content-text)' }}
+          />
+        </div>
       </div>
 
       <h3

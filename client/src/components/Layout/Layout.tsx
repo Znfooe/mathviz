@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { NarrationProvider, useNarrationOptional } from '../../contexts/NarrationContext'
 import { ThemeProvider } from '../../contexts/ThemeContext'
+import { FavoritesProvider } from '../../contexts/FavoritesContext'
 import { FullscreenParamProvider } from '../../contexts/FullscreenParamContext'
 import { NarrationController } from '../NarrationController'
 import { BugReportButton } from '../BugReport'
@@ -107,11 +108,13 @@ function LayoutContent() {
 export default function Layout() {
   return (
     <ThemeProvider>
-      <NarrationProvider>
-        <FullscreenParamProvider>
-          <LayoutContent />
-        </FullscreenParamProvider>
-      </NarrationProvider>
+      <FavoritesProvider>
+        <NarrationProvider>
+          <FullscreenParamProvider>
+            <LayoutContent />
+          </FullscreenParamProvider>
+        </NarrationProvider>
+      </FavoritesProvider>
     </ThemeProvider>
   )
 }

@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+﻿﻿﻿﻿import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import {
-  Sprout, BookOpen, Book, GraduationCap, FlaskConical, ChevronRight, Search, X, RefreshCw,
+  Sprout, BookOpen, Book, GraduationCap, FlaskConical, ChevronRight, Search, X, RefreshCw, Star,
 } from 'lucide-react'
 import ThemePicker from '../ThemePicker'
 import { resolveIcon } from '../../utils/iconMap'
 import { buildPinyinIndex } from '../../experiments/searchExperiments'
 import { CHECK_UPDATE_EVENT } from '../Update/UpdateManager'
+import { useFavorites } from '../../contexts/FavoritesContext'
 
 interface NavCategory {
   name: string
@@ -651,6 +652,18 @@ function SidebarSearch({ onNavigate }: { onNavigate: () => void }) {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [expandedCategories, setExpandedCategories] = useState<string[]>(['入门级', '基础级'])
+  const [favOpen, setFavOpen] = useState(true)
+  const { favorites, removeFavorite } = useFavorites()
+
+  // path → 导航项映射，用于渲染收藏列表
+  const navItemMap = useMemo(() => {
+    const m = new Map<string, { label: string; path: string }>()
+    navCategories.forEach((c) => c.items.forEach((i) => m.set(i.path, i)))
+    return m
+  }, [])
+  const favoriteItems = favorites
+    .map((p) => navItemMap.get(p))
+    .filter((i): i is { label: string; path: string } => !!i)
 
   const toggleCategory = (name: string) => {
     setExpandedCategories((prev) =>
@@ -767,6 +780,80 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               </div>
             </div>
           ))}
+
+          {/* 我的收藏 */}
+          <div className="mb-1">
+            <button
+              onClick={() => setFavOpen((v) => !v)}
+              aria-expanded={favOpen}
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all duration-200 group"
+            >
+              <span className="flex items-center gap-3">
+                <Star
+                  className={`w-4 h-4 transition-transform group-hover:scale-110 ${
+                    favoriteItems.length > 0 ? 'fill-amber-400 text-amber-400' : ''
+                  }`}
+                />
+                <span className="text-sm font-semibold">我的收藏</span>
+                {favoriteItems.length > 0 && (
+                  <span className="text-xs text-slate-500 bg-slate-700/50 px-2 py-0.5 rounded-full">
+                    {favoriteItems.length}
+                  </span>
+                )}
+              </span>
+              <ChevronRight
+                aria-hidden="true"
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${favOpen ? 'rotate-90' : ''}`}
+              />
+            </button>
+
+            <div
+              className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                favOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+              }`}
+            >
+              {favoriteItems.length === 0 ? (
+                <p className="ml-9 mt-1 mr-3 text-xs leading-relaxed text-slate-500">
+                  还没有收藏。点击首页实验卡片右上角的☆，即可把常用实验收藏到这里。
+                </p>
+              ) : (
+                <ul className="ml-3 mt-1 space-y-0.5 border-l-2 border-slate-700/50 pl-3">
+                  {favoriteItems.map((item) => (
+                    <li key={item.path} className="group/fav relative">
+                      <NavLink
+                        to={item.path}
+                        onClick={handleNavClick}
+                        className={({ isActive }) =>
+                          `flex items-center gap-2.5 px-3 py-2.5 md:py-2 rounded-lg text-sm transition-all duration-300 pr-8 ${
+                            isActive ? 'nav-link-active' : 'hover:translate-x-1'
+                          }`
+                        }
+                      >
+                        {(() => {
+                          const IconComp = resolveIcon(item.path)
+                          return <IconComp className="w-4 h-4 flex-shrink-0" />
+                        })()}
+                        <span className="truncate">{item.label}</span>
+                      </NavLink>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          removeFavorite(item.path)
+                        }}
+                        aria-label={`取消收藏 ${item.label}`}
+                        title="取消收藏"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md opacity-0 group-hover/fav:opacity-60 hover:!opacity-100 transition-opacity"
+                        style={{ color: 'var(--sidebar-text-muted)' }}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </div>
       </nav>
 
