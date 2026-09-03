@@ -8,6 +8,9 @@ dist/
 build/
 *.local
 
+# Release packaging workspace (zips are published via GitHub Releases)
+release/
+
 # IDE
 .idea/
 .vscode/
