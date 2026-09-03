@@ -1,0 +1,483 @@
+#!/usr/bin/env npx ts-node
+/**
+ * 课程完整性检查脚本
+ *
+ * 在构建前运行，确保所有课程都正确注册在各个配置文件中
+ * 防止出现"新课程使用傅里叶动画"这类低级错误
+ */
+
+import * as fs from 'fs'
+import * as path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+const ROOT = path.resolve(__dirname, '..')
+const NARRATIONS_DIR = path.join(ROOT, 'src/narrations/scripts')
+const SCENES_DIR = path.join(ROOT, 'src/components/NarrationPresenter')
+const RENDERERS_DIR = path.join(ROOT, 'src/components/NarrationPresenter/scenes')
+
+interface CheckResult {
+  courseId: string
+  hasScript: boolean
+  hasSceneConfig: boolean
+  hasRenderer: boolean
+  registeredInFactory: boolean
+  registeredInPresenter: boolean
+  registeredInCustomList: boolean
+  /** 是否在 catalog.ts 中（决定首页是否出现卡片） */
+  inCatalog: boolean
+  /** 是否在 Sidebar.tsx 中（决定左侧导航是否出现入口） */
+  inSidebar: boolean
+  /** 是否在 App.tsx 中配了路由（决定链接点开是否 404） */
+  hasRoute: boolean
+}
+
+// 不需要专属渲染器的课程（使用默认傅里叶渲染）
+const COURSES_USING_DEFAULT_RENDERER = ['fourier']
+
+// 有特殊处理逻辑的课程（在 NarrationPresenter 中单独处理，不需要在 experimentsWithCustomRenderer 列表中）
+const COURSES_WITH_SPECIAL_HANDLING = ['basic-arithmetic']
+
+// 待完成的课程（已有讲解稿件但尚未完成场景配置，暂时跳过检查）
+// TODO: 完成这些课程的配置后从此列表移除
+const COURSES_PENDING_COMPLETION: string[] = []
+
+function getAllCourseIds(): string[] {
+  // 从讲解稿件目录获取所有课程 ID
+  const files = fs.readdirSync(NARRATIONS_DIR)
+  return files
+    .filter(f => f.endsWith('.ts') && f !== 'index.ts')
+    .map(f => f.replace('.ts', ''))
+}
+
+function checkSceneConfigExists(courseId: string): boolean {
+  // 检查场景配置文件是否存在
+  const camelCase = toCamelCase(courseId)
+  // 处理特殊命名：conic-sections -> conic, quadratic-function -> quadratic 等
+  const shortCamelCase = camelCase.replace(/Sections$/, '').replace(/Function$/, '')
+
+  const possibleNames = [
+    `${courseId}Scenes.ts`,
+    `${camelCase}Scenes.ts`,
+    `${shortCamelCase}Scenes.ts`,
+  ]
+  return possibleNames.some(name =>
+    fs.existsSync(path.join(SCENES_DIR, name))
+  )
+}
+
+function checkRendererExists(courseId: string): boolean {
+  // 检查场景渲染器是否存在（目录形式或文件形式）
+  const pascalCase = toPascalCase(courseId)
+  // 处理特殊命名：conic-sections -> Conic, quadratic-function -> Quadratic 等
+  const shortPascalCase = pascalCase.replace(/Sections$/, '').replace(/Function$/, '')
+
+  const possiblePaths = [
+    // 目录形式（主要形式）
+    path.join(RENDERERS_DIR, pascalCase),
+    path.join(RENDERERS_DIR, shortPascalCase),
+    // 文件形式
+    path.join(RENDERERS_DIR, `${pascalCase}SceneRenderer.tsx`),
+    path.join(RENDERERS_DIR, `${shortPascalCase}SceneRenderer.tsx`),
+  ]
+  return possiblePaths.some(p => fs.existsSync(p))
+}
+
+function checkRegisteredInFactory(courseId: string): boolean {
+  // 检查是否在 SceneRendererFactory 中注册
+  const factoryPath = path.join(RENDERERS_DIR, 'SceneRendererFactory.tsx')
+  const content = fs.readFileSync(factoryPath, 'utf-8')
+  return content.includes(`'${courseId}'`)
+}
+
+function checkRegisteredInPresenter(courseId: string): boolean {
+  // 场景配置已改为按需加载: 注册表在 sceneFiles.ts 的 SCENE_FILES 中,
+  // 由 sceneRegistry.loadSceneConfig 动态 import(原 NarrationPresenter.sceneConfigMap 已移除)
+  const registryPath = path.join(SCENES_DIR, 'sceneFiles.ts')
+  const content = fs.readFileSync(registryPath, 'utf-8')
+  const mapMatch = content.match(/SCENE_FILES: Record<string, string> = \{([\s\S]*?)\n\}/m)
+  if (!mapMatch) return false
+  // 注册项形如 'course-id': 'xxxScenes', 顺带校验指向的文件真实存在
+  const entry = mapMatch[1].match(new RegExp(`'${courseId}':\\s*'([^']+)'`))
+  if (!entry) return false
+  return fs.existsSync(path.join(SCENES_DIR, `${entry[1]}.ts`))
+}
+
+function checkRegisteredInCustomList(courseId: string): boolean {
+  // 检查是否在 experimentsWithCustomRenderer 列表中
+  const presenterPath = path.join(SCENES_DIR, 'NarrationPresenter.tsx')
+  const content = fs.readFileSync(presenterPath, 'utf-8')
+  const customListMatch = content.match(/experimentsWithCustomRenderer\s*=\s*\[([\s\S]*?)\]/)
+  if (!customListMatch) return false
+  return customListMatch[1].includes(`'${courseId}'`)
+}
+
+// 三个前端集成点的内容只读一次, 300 门课逐个 readFileSync 太浪费
+const catalogContent = fs.readFileSync(path.join(ROOT, 'src/experiments/catalog.ts'), 'utf-8')
+const sidebarContent = fs.readFileSync(path.join(ROOT, 'src/components/Layout/Sidebar.tsx'), 'utf-8')
+const appContent = fs.readFileSync(path.join(ROOT, 'src/App.tsx'), 'utf-8')
+
+function checkInCatalog(courseId: string): boolean {
+  // catalog 条目形如 path: '/course-id'
+  return new RegExp(`path:\\s*'/${courseId}'`).test(catalogContent)
+}
+
+function checkInSidebar(courseId: string): boolean {
+  return new RegExp(`path:\\s*'/${courseId}'`).test(sidebarContent)
+}
+
+function checkHasRoute(courseId: string): boolean {
+  // App.tsx 里是相对路径的嵌套路由: <Route path="course-id" ...>
+  return new RegExp(`path="/?${courseId}"`).test(appContent)
+}
+
+function toCamelCase(str: string): string {
+  return str.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+}
+
+function toPascalCase(str: string): string {
+  const camel = toCamelCase(str)
+  return camel.charAt(0).toUpperCase() + camel.slice(1)
+}
+
+function checkCourse(courseId: string): CheckResult {
+  return {
+    courseId,
+    hasScript: true, // 已经从脚本目录获取，肯定存在
+    hasSceneConfig: checkSceneConfigExists(courseId),
+    hasRenderer: checkRendererExists(courseId),
+    registeredInFactory: checkRegisteredInFactory(courseId),
+    registeredInPresenter: checkRegisteredInPresenter(courseId),
+    registeredInCustomList: checkRegisteredInCustomList(courseId),
+    inCatalog: checkInCatalog(courseId),
+    inSidebar: checkInSidebar(courseId),
+    hasRoute: checkHasRoute(courseId),
+  }
+}
+
+/** 校验所有场景渲染器的 props 契约。
+ *
+ * SceneRendererWrapper 只传 scene/isInteractive。渲染器若自行声明一套 Props
+ * 并把别的字段(如 state)设为必需, TypeScript 查不出来 —— wrapper 用的是通用
+ * SceneRendererProps, 两边类型互不相干 —— 运行时才崩。
+ * (2026-07 实测 fractions 一进 concept 段落就抛 reading 'numerator1' of undefined)
+ *
+ * 例外: BasicArithmetic 由 NarrationPresenter 特殊分支显式传 state,
+ * 已把 state 改为可选 + 缺失时从 params 派生, 两条路径都安全。
+ */
+const RENDERER_PROPS_EXCEPTIONS = ['BasicArithmeticSceneRenderer.tsx']
+
+function checkRendererPropsContract(): string[] {
+  const problems: string[] = []
+  for (const dir of fs.readdirSync(RENDERERS_DIR, { withFileTypes: true })) {
+    if (!dir.isDirectory()) continue
+    for (const file of fs.readdirSync(path.join(RENDERERS_DIR, dir.name))) {
+      if (!/SceneRenderer\.tsx$/.test(file)) continue
+      if (RENDERER_PROPS_EXCEPTIONS.includes(file)) continue
+      const full = path.join(RENDERERS_DIR, dir.name, file)
+      const content = fs.readFileSync(full, 'utf-8')
+      if (content.includes('SceneRendererProps')) continue
+      problems.push(
+        `❌ [${dir.name}/${file}] 未使用 SceneRendererProps 声明 props。` +
+        `wrapper 只传 scene/isInteractive, 自定义必需 prop 会在运行时是 undefined`
+      )
+    }
+  }
+  return problems
+}
+
+/**
+ * 讲解控制条与侧边栏的无障碍契约。
+ *
+ * 这些按钮只有 SVG 图标没有文字, 屏幕阅读器读出来是空的; 之前 8 颗按钮
+ * 0 个 aria-label, 靠浏览器探测才发现。这里做静态兜底, 保证不再退化。
+ */
+const A11Y_REQUIRED: Array<{ file: string; needles: string[] }> = [
+  {
+    file: 'src/components/NarrationPresenter/NarrationPresenter.tsx',
+    needles: ["aria-label=\"上一句\"", "aria-label=\"下一句\"", "aria-label=\"播放速度\"", 'role="slider"', 'aria-valuenow'],
+  },
+  {
+    file: 'src/components/Layout/Sidebar.tsx',
+    needles: ['aria-expanded'],
+  },
+]
+
+function checkAccessibility(): string[] {
+  const problems: string[] = []
+  for (const { file, needles } of A11Y_REQUIRED) {
+    const full = path.join(ROOT, file)
+    if (!fs.existsSync(full)) {
+      problems.push(`❌ [${file}] 文件不存在, 无障碍检查无法进行`)
+      continue
+    }
+    const content = fs.readFileSync(full, 'utf-8')
+    for (const needle of needles) {
+      if (!content.includes(needle)) {
+        problems.push(`❌ [${file}] 缺少无障碍标记 ${needle}（图标按钮/进度条屏幕阅读器不可用）`)
+      }
+    }
+  }
+  return problems
+}
+
+/**
+ * 讲解稿的每一行都必须有对应的场景配置, 反之场景配置里也不该有稿件里
+ * 不存在的 lineId。缺配置的行会退化成上一句的画面(用户看着像卡住),
+ * 多余的配置则是改稿后留下的死代码, 两种都不会报错, 只能静态查。
+ */
+function findScenesFile(courseId: string): string | null {
+  const camelCase = toCamelCase(courseId)
+  const shortCamelCase = camelCase.replace(/Sections$/, '').replace(/Function$/, '')
+  const names = [`${courseId}Scenes.ts`, `${camelCase}Scenes.ts`, `${shortCamelCase}Scenes.ts`]
+  const hit = names.find(n => fs.existsSync(path.join(SCENES_DIR, n)))
+  return hit ? path.join(SCENES_DIR, hit) : null
+}
+
+function checkLineSceneCoverage(courseId: string): string[] {
+  const scriptPath = path.join(NARRATIONS_DIR, `${courseId}.json`)
+  const scenesPath = findScenesFile(courseId)
+  if (!fs.existsSync(scriptPath) || !scenesPath) return []
+
+  const script = JSON.parse(fs.readFileSync(scriptPath, 'utf-8'))
+  const lineIds: string[] = (script.sections ?? []).flatMap(
+    (s: { lines?: Array<{ id: string }> }) => (s.lines ?? []).map(l => l.id)
+  )
+  const content = fs.readFileSync(scenesPath, 'utf-8')
+  const sceneIds = new Set(
+    [...content.matchAll(/lineId:\s*'([^']+)'/g)].map(m => m[1])
+  )
+
+  const problems: string[] = []
+  const missing = lineIds.filter(id => !sceneIds.has(id))
+  const orphan = [...sceneIds].filter(id => !lineIds.includes(id))
+  if (missing.length > 0) {
+    problems.push(
+      `❌ [${courseId}] ${missing.length} 行讲解没有场景配置（画面会停在上一句）: ${missing.slice(0, 5).join(', ')}`
+    )
+  }
+  if (orphan.length > 0) {
+    problems.push(
+      `❌ [${courseId}] ${orphan.length} 个场景配置对应的讲解行已不存在（改稿残留）: ${orphan.slice(0, 5).join(', ')}`
+    )
+  }
+  return problems
+}
+
+/**
+ * 配音 manifest 里登记的 text 必须与讲解稿逐字一致。
+ *
+ * 改了稿件却忘了重新生成音频时, 页面字幕显示新文本、耳朵听到旧文本,
+ * 没有任何报错。这类不一致曾经在 18 门课里累积到 248 行, 只能静态查。
+ * 修法: 删掉对应 mp3 后跑 `python3 scripts/repair_audio.py <课程>`。
+ */
+const AUDIO_ROOT = path.join(ROOT, 'public/audio/narrations')
+
+function checkAudioTextSync(courseId: string): string[] {
+  const scriptPath = path.join(NARRATIONS_DIR, `${courseId}.json`)
+  if (!fs.existsSync(scriptPath)) return []
+  const script = JSON.parse(fs.readFileSync(scriptPath, 'utf-8'))
+  const want = new Map<string, string>()
+  for (const section of script.sections ?? []) {
+    for (const line of section.lines ?? []) want.set(line.id, String(line.text).trim())
+  }
+
+  const stale: string[] = []
+  for (const voice of ['yunxi', 'xiaoxiao']) {
+    const mp = path.join(AUDIO_ROOT, courseId, voice, 'manifest.json')
+    if (!fs.existsSync(mp)) continue
+    const manifest = JSON.parse(fs.readFileSync(mp, 'utf-8'))
+    for (const f of manifest.files ?? []) {
+      const expected = want.get(f.line_id)
+      if (expected === undefined) continue
+      if (String(f.text ?? '').trim() !== expected) stale.push(`${voice}/${f.line_id}`)
+    }
+  }
+  if (stale.length === 0) return []
+  return [
+    `❌ [${courseId}] ${stale.length} 条配音的文本与讲解稿不一致（字幕与朗读会对不上）: ` +
+    `${stale.slice(0, 4).join(', ')}${stale.length > 4 ? ' …' : ''}`,
+  ]
+}
+
+/**
+ * 配音必须「每条讲解行都有、且文件真的在」。
+ *
+ * checkAudioTextSync 只比对已登记条目的文本，某一行的 mp3 根本没生成时它照样
+ * 报绿 —— 2026-08 platonic-solids 少了 dl-3 一条就是这么漏过去的，全绿通过。
+ *
+ * ⚠️ 判据必须按 manifest 里的 path 查文件，不能数某个目录下的文件个数：
+ * 项目里两种布局并存，老课 path 指向 `<id>/yunxi/xxx.mp3`，
+ * 新课（finalize 过的）指向 `<id>/xxx.mp3`。按目录计数会把 300 门老课全误判。
+ */
+function checkAudioCompleteness(courseId: string): string[] {
+  const scriptPath = path.join(NARRATIONS_DIR, `${courseId}.json`)
+  const manifestPath = path.join(AUDIO_ROOT, courseId, 'manifest.json')
+  if (!fs.existsSync(scriptPath) || !fs.existsSync(manifestPath)) return []
+
+  const script = JSON.parse(fs.readFileSync(scriptPath, 'utf-8'))
+  const wantIds: string[] = (script.sections ?? []).flatMap(
+    (s: { lines?: Array<{ id: string }> }) => (s.lines ?? []).map((l) => l.id),
+  )
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+  const files: Array<{ line_id?: string; path?: string }> = manifest.files ?? []
+  const registered = new Set(files.map((f) => f.line_id))
+
+  const problems: string[] = []
+  const unregistered = wantIds.filter((id) => !registered.has(id))
+  if (unregistered.length > 0) {
+    problems.push(
+      `❌ [${courseId}] ${unregistered.length} 条讲解行没有配音登记（讲解到这里会没声音）: ` +
+      `${unregistered.slice(0, 4).join(', ')}${unregistered.length > 4 ? ' …' : ''}`
+    )
+  }
+
+  const missing = files
+    .filter((f) => f.path && !fs.existsSync(path.join(ROOT, 'public', f.path)))
+    .map((f) => f.path as string)
+  if (missing.length > 0) {
+    problems.push(
+      `❌ [${courseId}] ${missing.length} 个已登记的配音文件不存在: ` +
+      `${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ' …' : ''}`
+    )
+  }
+  return problems
+}
+
+function main() {
+  console.log('🔍 检查课程完整性...\n')
+
+  const courseIds = getAllCourseIds()
+  const results: CheckResult[] = courseIds.map(checkCourse)
+
+  let hasErrors = false
+  const errors: string[] = []
+  const warnings: string[] = []
+
+  for (const result of results) {
+    const isDefaultRenderer = COURSES_USING_DEFAULT_RENDERER.includes(result.courseId)
+    const hasSpecialHandling = COURSES_WITH_SPECIAL_HANDLING.includes(result.courseId)
+    const isPendingCompletion = COURSES_PENDING_COMPLETION.includes(result.courseId)
+
+    // 跳过待完成的课程
+    if (isPendingCompletion) {
+      warnings.push(`⚠️  [${result.courseId}] 待完成配置（已跳过检查）`)
+      continue
+    }
+
+    // 检查场景配置
+    if (!result.hasSceneConfig) {
+      errors.push(`❌ [${result.courseId}] 缺少场景配置文件 (xxxScenes.ts)`)
+      hasErrors = true
+    }
+
+    // 检查场景配置注册表(按需加载)
+    if (!result.registeredInPresenter) {
+      errors.push(`❌ [${result.courseId}] 未在 sceneFiles.ts 的 SCENE_FILES 中注册, 或注册项指向的 xxxScenes.ts 不存在`)
+      hasErrors = true
+    }
+
+    // 前端集成点: 漏掉任一处, 构建仍会通过, 但用户找不到或点不开这个实验
+    if (!result.hasRoute) {
+      errors.push(`❌ [${result.courseId}] 未在 App.tsx 中配置路由（链接会 404）`)
+      hasErrors = true
+    }
+    if (!result.inCatalog) {
+      errors.push(`❌ [${result.courseId}] 未在 catalog.ts 中登记（首页无卡片）`)
+      hasErrors = true
+    }
+    if (!result.inSidebar) {
+      errors.push(`❌ [${result.courseId}] 未在 Sidebar.tsx 中登记（左侧导航无入口）`)
+      hasErrors = true
+    }
+
+    // 非默认渲染器的课程需要额外检查
+    if (!isDefaultRenderer) {
+      if (!result.hasRenderer) {
+        errors.push(`❌ [${result.courseId}] 缺少场景渲染器 (XxxSceneRenderer.tsx)`)
+        hasErrors = true
+      }
+
+      if (!result.registeredInFactory) {
+        errors.push(`❌ [${result.courseId}] 未在 SceneRendererFactory.tsx 中注册`)
+        hasErrors = true
+      }
+
+      // 有特殊处理的课程不需要在 experimentsWithCustomRenderer 列表中
+      if (!hasSpecialHandling && !result.registeredInCustomList) {
+        errors.push(`❌ [${result.courseId}] 未在 experimentsWithCustomRenderer 列表中注册`)
+        hasErrors = true
+      }
+    }
+  }
+
+  // 渲染器 props 契约(全局检查, 与具体课程无关)
+  const propsProblems = checkRendererPropsContract()
+  if (propsProblems.length > 0) {
+    errors.push(...propsProblems)
+    hasErrors = true
+  }
+
+  // 逐课校验「讲解行 ↔ 场景配置」一一对应
+  const coverageProblems = courseIds.flatMap(checkLineSceneCoverage)
+  if (coverageProblems.length > 0) {
+    errors.push(...coverageProblems)
+    hasErrors = true
+  }
+
+  // 配音文本与讲解稿一致性
+  const audioProblems = courseIds.flatMap(checkAudioTextSync)
+  if (audioProblems.length > 0) {
+    errors.push(...audioProblems)
+    hasErrors = true
+  }
+
+  // 配音完整性: 每条讲解行都要有登记, 且登记的文件真的存在
+  const audioMissing = courseIds.flatMap(checkAudioCompleteness)
+  if (audioMissing.length > 0) {
+    errors.push(...audioMissing)
+    hasErrors = true
+  }
+
+  // 讲解控制条/侧边栏的无障碍契约(全局检查)
+  const a11yProblems = checkAccessibility()
+  if (a11yProblems.length > 0) {
+    errors.push(...a11yProblems)
+    hasErrors = true
+  }
+
+  if (hasErrors) {
+    console.log('发现以下问题：\n')
+    errors.forEach(e => console.log(e))
+    console.log('\n💡 提示：添加新课程时需要修改以下文件：')
+    console.log('   1. src/narrations/scripts/xxx.ts - 讲解稿件')
+    console.log('   2. src/components/NarrationPresenter/xxxScenes.ts - 场景配置')
+    console.log('   3. src/components/NarrationPresenter/scenes/XxxSceneRenderer.tsx - 场景渲染器')
+    console.log('   4. src/components/NarrationPresenter/scenes/SceneRendererFactory.tsx - 注册渲染器')
+    console.log('   5. src/components/NarrationPresenter/sceneFiles.ts - 注册场景配置文件名(按需加载)')
+    console.log('   6. src/components/NarrationPresenter/NarrationPresenter.tsx - 注册自定义渲染器列表')
+    console.log('')
+    process.exit(1)
+  }
+
+  // 显示警告（待完成的课程）
+  if (warnings.length > 0) {
+    console.log('⚠️  待完成的课程：\n')
+    warnings.forEach(w => console.log(w))
+    console.log('')
+  }
+
+  const completedCount = courseIds.length - COURSES_PENDING_COMPLETION.length
+  console.log(`✅ ${completedCount} 个课程配置完整！\n`)
+
+  // 打印课程列表
+  console.log('课程列表：')
+  results.forEach(r => {
+    const isDefault = COURSES_USING_DEFAULT_RENDERER.includes(r.courseId)
+    console.log(`  • ${r.courseId}${isDefault ? ' (默认渲染器)' : ''}`)
+  })
+}
+
+main()

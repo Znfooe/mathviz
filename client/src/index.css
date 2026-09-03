@@ -1,0 +1,626 @@
+@import "tailwindcss";
+
+/* ======================================================================
+ * 设计令牌 - 运行时可设置（通过 ThemeContext 动态注入）
+ * 默认：淡浅绿色主题
+ * ====================================================================== */
+:root {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* ============ 主题主色（可运行时修改） ============ */
+  --theme-primary: #6ee7b7;          /* 默认：淡浅绿色 */
+  --theme-primary-hover: #34d399;
+  --theme-primary-dark: #059669;
+
+  /* ============ 侧边栏 ============ */
+  --sidebar-bg: #d4f1e0;
+  --sidebar-bg-hover: rgba(0,0,0,0.05);
+  --sidebar-text: #111111;
+  --sidebar-text-muted: #666666;
+  --sidebar-border: rgba(0,0,0,0.08);
+  --sidebar-accent: #111111;
+  --sidebar-accent-text: #ffffff;   /* 选中态文字色，由 JS 根据 accent 深浅自动算 */
+  --sidebar-logo-bg: #111111;
+
+  /* ============ 右侧内容区 ============ */
+  --content-bg: #f0fdf4;
+  --content-card-bg: #ffffff;
+  --content-text: #111111;
+  --content-text-muted: #555555;
+  --content-border: #e5e5e5;
+  --content-accent: #111111;        /* 右侧强调色（按钮/标签等） */
+
+  /* ============ 设计令牌（兼容旧变量名） ============ */
+  --bg: var(--content-bg);
+  --bg-card: var(--content-card-bg);
+  --bg-muted: #f5f5f5;
+  --bg-hover: #eeeeee;
+  --border: var(--content-border);
+
+  /* ============ 语义色 ============ */
+  --color-text: #111111;
+  --color-text-secondary: #555555;
+  --color-text-tertiary: #999999;
+
+  /* ============ 阴影 ============ */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+
+  /* ============ 间距 & 圆角 ============ */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px;
+  --space-4: 16px; --space-5: 20px; --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 4px; --radius: 6px; --radius-md: 8px; --radius-lg: 12px;
+
+  /* ==================================================================
+   * 覆盖 Tailwind v4 的 CSS 颜色变量
+   * 彩色 → 灰度体系（项目中分散使用的 indigo/purple/pink 等）
+   * ================================================================== */
+  --color-indigo-50: #fafafa;
+  --color-indigo-100: #f5f5f5;
+  --color-indigo-200: #e5e5e5;
+  --color-indigo-300: #d4d4d4;
+  --color-indigo-400: #a3a3a3;
+  --color-indigo-500: #525252;
+  --color-indigo-600: #111111;
+  --color-indigo-700: #171717;
+
+  --color-purple-50: #fafafa;
+  --color-purple-100: #f5f5f5;
+  --color-purple-200: #e5e5e5;
+  --color-purple-400: #737373;
+  --color-purple-500: #525252;
+  --color-purple-600: #111111;
+  --color-purple-700: #171717;
+
+  --color-violet-50: #fafafa;
+  --color-violet-500: #525252;
+  --color-violet-600: #111111;
+
+  --color-pink-50: #fafafa;
+  --color-pink-200: #e5e5e5;
+  --color-pink-400: #737373;
+  --color-pink-500: #525252;
+  --color-pink-600: #111111;
+
+  --color-rose-50: #fafafa;
+  --color-rose-400: #737373;
+  --color-rose-500: #525252;
+  --color-rose-600: #111111;
+
+  --color-red-500: #111111;
+  --color-red-600: #000000;
+
+  --color-emerald-50: #fafafa;
+  --color-emerald-400: #737373;
+  --color-emerald-500: #525252;
+  --color-emerald-700: #171717;
+
+  --color-teal-400: #737373;
+  --color-teal-500: #525252;
+
+  --color-blue-50: #fafafa;
+  --color-blue-400: #737373;
+  --color-blue-500: #525252;
+  --color-blue-700: #171717;
+
+  --color-amber-400: #737373;
+  --color-amber-500: #525252;
+  --color-amber-700: #171717;
+
+  --color-cyan-50: #fafafa;
+  --color-cyan-500: #525252;
+  --color-cyan-600: #111111;
+
+  --color-fuchsia-50: #fafafa;
+  --color-fuchsia-500: #525252;
+}
+
+/* ======================================================================
+ * 全局重置
+ * ====================================================================== */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--content-bg);
+  color: var(--content-text);
+}
+
+/* ======================================================================
+ * 强制覆盖所有渐变背景 → 统一主题色
+ * aside 内部的渐变走 sidebar-accent（Logo、选中态等）
+ * 所有 Plotly 内部元素不受影响
+ * ====================================================================== */
+[class*="bg-gradient"]:not(.js-plotly-plot *):not([class*="plotly"] *) {
+  background: var(--content-accent) !important;
+}
+aside [class*="bg-gradient"]:not(.js-plotly-plot *):not([class*="plotly"] *) {
+  background: var(--sidebar-accent) !important;
+}
+
+/* 文字渐变 → 黑色文字 */
+[class*="bg-gradient"][class*="text-transparent"] {
+  background: none !important;
+  background-image: none !important;
+  -webkit-text-fill-color: #111111 !important;
+  color: #111111 !important;
+}
+aside [class*="bg-gradient"][class*="text-transparent"] {
+  -webkit-text-fill-color: var(--sidebar-text) !important;
+  color: var(--sidebar-text) !important;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #a3a3a3; }
+
+/* ======================================================================
+ * 全局滑块样式 - GPT 风格
+ * ====================================================================== */
+input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  background: transparent; height: 24px; cursor: pointer; width: 100%;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; background: #e5e5e5; border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px;
+  background: #111111; border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  margin-top: -6px; transition: transform 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+input[type="range"]::-moz-range-track { height: 4px; background: #e5e5e5; border-radius: 2px; border: none; }
+input[type="range"]::-moz-range-thumb {
+  width: 16px; height: 16px; background: #111111; border-radius: 50%;
+  border: 2px solid #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* ======================================================================
+ * 控制面板统一排版规范
+ * ====================================================================== */
+[class*="bg-white"][class*="rounded-lg"][class*="border"],
+[class*="bg-white"][class*="rounded-xl"][class*="border"] {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-sm) !important;
+  padding: var(--space-6) !important;
+}
+[class*="bg-white"][class*="border"] h3 {
+  font-size: 14px !important; font-weight: 600 !important;
+  color: var(--color-text) !important;
+  margin-bottom: var(--space-4) !important;
+  letter-spacing: 0.02em;
+}
+[class*="bg-white"][class*="border"] label {
+  font-size: 13px !important; color: var(--color-text-secondary) !important;
+  font-weight: 500; display: block; margin-bottom: var(--space-2);
+}
+[class*="bg-white"][class*="border"] > [class*="space-y-"] > div {
+  margin-bottom: var(--space-4);
+}
+label.flex.items-center.gap-2 {
+  gap: var(--space-2) !important; font-size: 13px !important;
+  color: var(--color-text-secondary) !important;
+  padding-top: 4px; padding-bottom: 4px; cursor: pointer;
+}
+[class*="bg-white"][class*="border"] [class*="space-y-2"] button {
+  border-radius: var(--radius) !important; padding: 10px 12px !important;
+  font-size: 13px !important; margin-bottom: 4px;
+  border: 1px solid var(--border) !important; transition: all 0.15s ease;
+}
+[class*="bg-white"][class*="border"] [class*="space-y-2"] button.bg-gray-100 { background: var(--bg-muted) !important; }
+[class*="bg-white"][class*="border"] [class*="space-y-2"] button:hover {
+  border-color: #a3a3a3 !important; background: var(--bg-hover) !important;
+}
+
+/* 选中态按钮 */
+button.bg-purple-600, button.bg-indigo-600 {
+  background: #111111 !important; color: #ffffff !important;
+}
+
+/* 公式展示框彩色背景 → 浅灰 */
+.bg-purple-50, .bg-blue-50, .bg-green-50, .bg-emerald-50,
+.bg-amber-50, .bg-rose-50, .bg-red-50, .bg-cyan-50,
+.bg-violet-50, .bg-pink-50, .bg-gray-50 {
+  background-color: var(--bg-muted) !important;
+}
+
+/* ======================================================================
+ * 侧边栏主题化样式 - 强制所有文字颜色走 CSS 变量
+ * 文字颜色 = 由 sidebar-bg 反色推导，和 accent 完全无关
+ * ====================================================================== */
+aside {
+  background: var(--sidebar-bg) !important;
+  /* 强制 aside 内所有元素文字颜色走 sidebar-text（除了选中态和有独立颜色的） */
+  color: var(--sidebar-text) !important;
+}
+
+/* 侧边栏内所有文字节点 - 强制反色适配背景 */
+aside h1, aside h2, aside h3, aside h4,
+aside p, aside span, aside label, aside li, aside a,
+aside button, aside div, aside svg, aside [class] {
+  color: var(--sidebar-text) !important;
+  -webkit-text-fill-color: var(--sidebar-text) !important;
+}
+
+/* 次级 muted 文字（分类标题、数字徽章等） */
+aside [class*="text-slate-400"],
+aside [class*="text-slate-500"],
+aside [class*="text-gray-400"],
+aside [class*="text-gray-500"],
+aside [class*="opacity-"],
+aside .text-muted {
+  color: var(--sidebar-text-muted) !important;
+  -webkit-text-fill-color: var(--sidebar-text-muted) !important;
+}
+
+/* 分割线 */
+aside [class*="border-slate-"],
+aside [class*="border-gray-"] {
+  border-color: var(--sidebar-border) !important;
+}
+
+/* hover 态 - 只变背景，文字色保持 sidebar-text */
+aside button[class*="hover:bg-white/10"]:hover,
+aside button[class*="hover:bg-white/5"]:hover,
+aside a:hover,
+aside [class*="hover:bg-slate"]:hover {
+  background: var(--sidebar-bg-hover) !important;
+  color: var(--sidebar-text) !important;
+  -webkit-text-fill-color: var(--sidebar-text) !important;
+}
+
+/* ===== 只有选中态(active)才用 accent-text ===== */
+aside a[aria-current="page"],
+aside .nav-link-active {
+  background: var(--sidebar-accent) !important;
+  color: var(--sidebar-accent-text) !important;
+  -webkit-text-fill-color: var(--sidebar-accent-text) !important;
+}
+aside a[aria-current="page"] svg,
+aside a[aria-current="page"] path,
+aside .nav-link-active svg {
+  color: var(--sidebar-accent-text) !important;
+}
+
+/* 侧边栏分类按钮的选中态 */
+aside button[class*="bg-white"],
+aside button[class*="bg-gray-100"] {
+  background: var(--sidebar-accent) !important;
+  color: var(--sidebar-accent-text) !important;
+  -webkit-text-fill-color: var(--sidebar-accent-text) !important;
+}
+
+/* Logo 区域 */
+aside [class*="from-indigo"],
+aside [class*="to-purple"],
+aside [class*="bg-gradient"] {
+  background: var(--sidebar-logo-bg) !important;
+}
+aside [class*="shadow-indigo-"] {
+  --tw-shadow-color: transparent;
+}
+
+/* 侧边栏分类按钮 - 纯文字无背景无边框 */
+aside button[class*="rounded-xl"] {
+  border: none !important;
+  background: transparent !important;
+}
+aside button[class*="hover:bg-white/10"]:hover {
+  background: var(--sidebar-bg-hover) !important;
+}
+
+/* 侧边栏导航项（NavLink）的细边框 */
+aside a[class*="rounded-lg"] {
+  border: 1px solid var(--sidebar-border) !important;
+}
+
+/* ======================================================================
+ * 侧边栏搜索框 + 下拉建议（颜色全部走主题变量，随主题自动适配）
+ * 选择器统一带 aside 前缀，保证特异性不低于上方 aside [class] 通用规则
+ * ====================================================================== */
+aside .sidebar-search-input {
+  background: var(--sidebar-bg-hover) !important;
+  border: 1px solid var(--sidebar-border) !important;
+  color: var(--sidebar-text) !important;
+  -webkit-text-fill-color: var(--sidebar-text) !important;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+aside .sidebar-search-input::placeholder {
+  color: var(--sidebar-text-muted) !important;
+  -webkit-text-fill-color: var(--sidebar-text-muted) !important;
+}
+aside .sidebar-search-input:focus {
+  border-color: var(--sidebar-accent) !important;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06) !important;
+}
+aside .ss-search-icon,
+aside .ss-clear-btn {
+  color: var(--sidebar-text-muted) !important;
+}
+aside .ss-clear-btn:hover {
+  background: var(--sidebar-bg-hover) !important;
+}
+
+/* 下拉建议容器 */
+aside .sidebar-search-dropdown {
+  background: var(--sidebar-card-bg, var(--sidebar-bg)) !important;
+  border: 1px solid var(--sidebar-border) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16) !important;
+}
+
+/* 建议项：默认态 */
+aside .sidebar-search-item {
+  color: var(--sidebar-text) !important;
+  -webkit-text-fill-color: var(--sidebar-text) !important;
+  transition: background-color .15s ease;
+}
+aside .sidebar-search-item .ss-item-icon {
+  color: var(--sidebar-text-muted) !important;
+}
+aside .sidebar-search-item .ss-cat {
+  color: var(--sidebar-text-muted) !important;
+  background: var(--sidebar-bg-hover) !important;
+}
+/* 建议项：悬停 / 键盘高亮态（与导航选中态一致，accent 底 + accent-text 字） */
+aside .sidebar-search-item:hover,
+aside .sidebar-search-item.active {
+  background: var(--sidebar-accent) !important;
+  color: var(--sidebar-accent-text) !important;
+  -webkit-text-fill-color: var(--sidebar-accent-text) !important;
+}
+aside .sidebar-search-item:hover .ss-item-icon,
+aside .sidebar-search-item.active .ss-item-icon {
+  color: var(--sidebar-accent-text) !important;
+}
+aside .sidebar-search-item:hover .ss-cat,
+aside .sidebar-search-item.active .ss-cat {
+  color: var(--sidebar-accent-text) !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+}
+
+/* 命中关键词高亮 */
+aside .sidebar-search-item .ss-mark {
+  background: transparent !important;
+  color: var(--sidebar-accent) !important;
+  -webkit-text-fill-color: var(--sidebar-accent) !important;
+  font-weight: 700;
+}
+aside .sidebar-search-item:hover .ss-mark,
+aside .sidebar-search-item.active .ss-mark {
+  color: var(--sidebar-accent-text) !important;
+  -webkit-text-fill-color: var(--sidebar-accent-text) !important;
+}
+
+/* 无结果提示 */
+aside .sidebar-search-empty {
+  color: var(--sidebar-text-muted) !important;
+  -webkit-text-fill-color: var(--sidebar-text-muted) !important;
+}
+
+/* ============ 右侧内容区卡片 & 按钮 ============ */
+main, [role="main"], .main-content-area {
+  background: var(--content-bg) !important;
+}
+
+/* ===== Home 卡片图标容器 - 跟侧边栏选中态统一 =====
+   只作用于带 icon-holder 类的容器，不影响 Plotly ===== */
+main .icon-holder {
+  background: var(--content-accent) !important;
+}
+main .icon-holder svg {
+  color: var(--content-accent-text) !important;
+}
+/* 难度标签按钮里的文字颜色 */
+main [class*="text-emerald-700"]:not(.js-plotly-plot *),
+main [class*="text-blue-700"]:not(.js-plotly-plot *),
+main [class*="text-amber-700"]:not(.js-plotly-plot *),
+main [class*="text-purple-700"]:not(.js-plotly-plot *),
+main [class*="text-rose-700"]:not(.js-plotly-plot *) {
+  color: var(--content-text-muted) !important;
+}
+
+/* ===== Plotly 图表保护 =====
+   ThemedPlot 组件已设 plot_bgcolor/paper_bgcolor 为白色
+   CSS 只需要保护 Plotly 内部不被全局误伤 */
+.js-plotly-plot {
+  background: #ffffff !important;
+}
+/* Plotly modebar 按钮颜色 */
+.js-plotly-plot .modebar-btn path,
+.js-plotly-plot .modebar-btn svg {
+  fill: currentColor !important;
+}
+
+main h1, main h2, main h3, main h4 {
+  color: var(--content-text);
+}
+main p, main span, main label {
+  color: var(--content-text);
+}
+main [class*="text-gray-600"],
+main [class*="text-gray-700"],
+main [class*="text-gray-800"] {
+  color: var(--content-text) !important;
+}
+main [class*="text-gray-400"],
+main [class*="text-gray-500"] {
+  color: var(--content-text-muted) !important;
+}
+
+/* ===== 右侧按钮选中态 ===== */
+main button[class*="bg-black"]:not([class*="plotly"]):not([class*="control"]):not([class*="modebar"]),
+main button[class*="bg-neutral-900"]:not([class*="plotly"]):not([class*="control"]):not([class*="modebar"]),
+main button[class*="bg-purple-600"]:not([class*="plotly"]):not([class*="control"]):not([class*="modebar"]),
+main button[class*="bg-indigo-600"]:not([class*="plotly"]):not([class*="control"]):not([class*="modebar"]) {
+  background: var(--content-accent) !important;
+  color: var(--content-accent-text) !important;
+}
+
+/* ===== 侧边栏选中态 - 液体填充动画 ===== */
+aside a[aria-current="page"],
+aside .nav-link-active {
+  position: relative !important;
+  background: transparent !important;
+  isolation: isolate;
+}
+/* 液体填充伪元素 */
+aside a[aria-current="page"]::before,
+aside .nav-link-active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--sidebar-accent) !important;
+  z-index: -1;
+  /* 横向液体填充动画 */
+  transform-origin: left center;
+  animation: liquid-fill 0.45s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+/* 取消选择时的反向收缩 */
+aside a.nav-link-leaving::before,
+aside .nav-link-leaving::before {
+  animation: liquid-shrink 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+@keyframes liquid-fill {
+  0%   { transform: scaleX(0); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 1; }
+}
+@keyframes liquid-shrink {
+  0%   { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
+
+/* ===== Portal 弹出面板（主题设置）的文字颜色跟随主内容 ===== */
+body > [role="dialog"],
+body > div.z-\[9999\],
+body > div.z-\[9998\] {
+  color: var(--content-text);
+}
+
+/* ======================================================================
+ * 实验页面布局统一规范
+ * 让左列图表紧凑、右列控制面板不被挤压
+ * ====================================================================== */
+
+/* 主内容区内边距 & 最大宽度（避免超大屏上内容拉太散） */
+main .main-content-area,
+main > div:first-child {
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 实验页面的 grid 布局 - 统一间距 */
+main [class*="grid-cols"][class*="lg:grid-cols-3"],
+main [class*="grid-cols"][class*="lg:grid-cols-5"] {
+  gap: 20px !important;
+  align-items: start;
+}
+
+/* 左列（图表区域）不允许无限拉伸 */
+main [class*="lg:col-span-2"],
+main [class*="lg:col-span-3"] {
+  max-height: none;  /* 允许内容自然高度，但下面约束内部图表 */
+}
+
+/* 图表容器（canvas、Plotly 包裹的 div）统一最大高度 */
+main canvas.w-full,
+main canvas[class*="rounded"],
+main [class*="bg-white"] > canvas,
+main [class*="rounded-lg"] > canvas,
+main .themed-plot-wrapper,
+main .js-plotly-plot {
+  max-height: 480px !important;
+  height: 100% !important;
+  object-fit: contain;
+  width: 100% !important;
+}
+
+/* canvas 直接子级：强制从父容器继承高度，不要用 intrinsic height */
+main canvas {
+  height: 100% !important;
+  max-height: 480px !important;
+  aspect-ratio: auto !important;
+}
+
+/* 右列控制面板 - 宽度自适应不被左列挤压 */
+main [class*="lg:col-span-1"] {
+  min-width: 260px;
+  max-width: 380px;
+}
+
+/* 右侧面板内卡片紧凑化 */
+main [class*="lg:col-span-1"] [class*="bg-white"],
+main [class*="lg:col-span-1"] [class*="rounded-lg"],
+main [class*="lg:col-span-1"] [class*="rounded-xl"] {
+  padding: 16px !important;
+}
+main [class*="lg:col-span-1"] h3 {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  margin-bottom: 10px !important;
+  letter-spacing: 0.02em;
+}
+main [class*="lg:col-span-1"] p,
+main [class*="lg:col-span-1"] li {
+  font-size: 12px !important;
+  line-height: 1.7 !important;
+}
+
+/* 主内容区内边距统一 */
+main, main > div, [role="main"] {
+  padding: 20px 24px !important;
+}
+main h1 {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+}
+main h1 + p,
+main header p {
+  font-size: 13px !important;
+  margin-top: 2px !important;
+}
+
+/* 实验页面 header 区域紧凑 */
+main header[class*="flex"]:has(h1) {
+  margin-bottom: 12px !important;
+}
+
+/* 讲解按钮等操作按钮 */
+main button[class*="bg-gradient"]:not([class*="plotly"]):not([class*="control"]):not([class*="modebar"]),
+main button[class*="from-indigo"] {
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+}
+
+/* canvas 外层容器（一般是带 bg-white 的卡片） */
+main [class*="bg-white"]:has(canvas),
+main [class*="bg-white"]:has(.js-plotly-plot) {
+  padding: 14px !important;
+}
+
+/* ======================================================================
+ * 动画
+ * ====================================================================== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.35s ease-out; }

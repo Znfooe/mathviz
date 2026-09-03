@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Testing
+coverage/
+
+# Cache
+.cache/
+.eslintcache
+
+# 报价单含手机号/底价等商业敏感信息, 不提交到公开仓库
+数学之美_软件授权报价单.docx
+~$*.docx
+
+# 扩课工作脚手架（生成器输入/中间产物，不入库）
+.expand200/
+.expand500/
+.claude/
